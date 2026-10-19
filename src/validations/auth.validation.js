@@ -11,6 +11,14 @@ export class AuthValidations {
     const result = schema.validate(params, { errors: { wrap: { label: false } } });
     return result;
   }
+  static loginUser(params) {
+    const schema = Joi.object({
+      email: Joi.string().email().required(),
+      password: Joi.string().required().min(4).max(20)
+    });
+    const result = schema.validate(params, { errors: { wrap: { label: false } } });
+    return result;
+  }
 
   static verifyOtp(params) {
     const schema = Joi.object({
