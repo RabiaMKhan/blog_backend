@@ -2,17 +2,15 @@ import { sendMail } from "../config/mailer.config.js";
 
 export const OTP_EXPIRY_MINUTES = 10;
 
-export const generateOtp = (user) => {
+export const generateOtp = () => {
   const length = 6;
   const otp = Math.floor(
     Math.pow(10, length - 1) + Math.random() * 9 * Math.pow(10, length - 1),
   );
-  user.otpExpiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
-  return otp;
+  return String(otp);
 };
 
-export const genrateOTPAndSendEmail = async (user) => {
-  const otp = generateOtp(user);
+export const sendOtpEmail = async (user, otp) => {
   await sendMail({
     to: user.email,
     subject: "Your verification code",
