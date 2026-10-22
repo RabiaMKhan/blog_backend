@@ -54,6 +54,12 @@ const postSchema = new Schema(
       default: 0,
       min: 0,
     },
+    // replies included - kept in step with the comments collection
+    commentsCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
   },
   {
     timestamps: true,

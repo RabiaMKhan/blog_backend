@@ -1,6 +1,7 @@
 import createHttpError from "http-errors";
 import PostModel from "../models/posts.model.js";
 import LikeModel from "../models/likes.model.js";
+import CommentModel from "../models/comments.model.js";
 import { PostValidations } from "../validations/post.validation.js";
 import { makeExcerpt, slugify, slugSuffix } from "../utils/post.utils.js";
 
@@ -135,7 +136,10 @@ export const updatePostService = async (postId, userId, postData) => {
 export const deletePostService = async (postId, userId) => {
   const post = await findOwnPost(postId, userId);
   await post.deleteOne();
-  await LikeModel.deleteMany({ post: post._id });
+  await Promise.all([
+    LikeModel.deleteMany({ post: post._id }),
+    CommentModel.deleteMany({ post: post._id }),
+  ]);
 };
 
 // Liking twice is not an error - the post just stays liked
