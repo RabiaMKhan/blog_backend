@@ -48,6 +48,12 @@ const postSchema = new Schema(
     publishedAt: {
       type: Date,
     },
+    // kept in step with the likes collection, so lists can show counts without counting
+    likesCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
   },
   {
     timestamps: true,

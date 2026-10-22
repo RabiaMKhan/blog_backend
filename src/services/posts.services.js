@@ -1,5 +1,6 @@
 import createHttpError from "http-errors";
 import PostModel from "../models/posts.model.js";
+import LikeModel from "../models/likes.model.js";
 import { PostValidations } from "../validations/post.validation.js";
 import { makeExcerpt, slugify, slugSuffix } from "../utils/post.utils.js";
 
@@ -107,7 +108,10 @@ export const getPostBySlugService = async (slug, userId) => {
   if (!post || (post.status !== "published" && !isAuthor)) {
     throw createHttpError.NotFound("Post not found.");
   }
-  return post;
+  const likedByMe = userId
+    ? Boolean(await LikeModel.exists({ post: post._id, user: userId }))
+    : false;
+  return { ...post.toObject(), likedByMe };
 };
 
 export const updatePostService = async (postId, userId, postData) => {
@@ -131,4 +135,45 @@ export const updatePostService = async (postId, userId, postData) => {
 export const deletePostService = async (postId, userId) => {
   const post = await findOwnPost(postId, userId);
   await post.deleteOne();
+  await LikeModel.deleteMany({ post: post._id });
+};
+
+// Liking twice is not an error - the post just stays liked
+export const likePostService = async (postId, userId) => {
+  const { id } = validate("postId", { id: postId });
+  const post = await PostModel.findOne({ _id: id, status: "published" });
+  if (!post) throw createHttpError.NotFound("Post not found.");
+
+  try {
+    await LikeModel.create({ post: id, user: userId });
+  } catch (err) {
+    if (err.code !== 11000) throw err;
+    return { liked: true, likesCount: post.likesCount };
+  }
+
+  // $inc is atomic, so likes arriving at the same moment are all counted
+  const updated = await PostModel.findByIdAndUpdate(
+    id,
+    { $inc: { likesCount: 1 } },
+    { returnDocument: "after" },
+  );
+  return { liked: true, likesCount: updated.likesCount };
+};
+
+// Unliking a post that isn't liked is not an error either.
+// Works on drafts too, so a like isn't stuck if the post was unpublished.
+export const unlikePostService = async (postId, userId) => {
+  const { id } = validate("postId", { id: postId });
+  const post = await PostModel.findById(id);
+  if (!post) throw createHttpError.NotFound("Post not found.");
+
+  const { deletedCount } = await LikeModel.deleteOne({ post: id, user: userId });
+  if (!deletedCount) return { liked: false, likesCount: post.likesCount };
+
+  const updated = await PostModel.findByIdAndUpdate(
+    id,
+    { $inc: { likesCount: -1 } },
+    { returnDocument: "after" },
+  );
+  return { liked: false, likesCount: updated.likesCount };
 };

@@ -6,6 +6,8 @@ import {
   getMyPosts,
   getPostBySlug,
   getPosts,
+  likePost,
+  unlikePost,
   updatePost,
 } from "../../controllers/posts/post.controller.js";
 import AuthMiddleware, { OptionalAuthMiddleware } from "../../middlewares/auth.middleware.js";
@@ -16,5 +18,6 @@ router.route("/").get(getPosts).post(AuthMiddleware, trimRequest.all, createPost
 router.route("/me").get(AuthMiddleware, getMyPosts);
 router.route("/:slug").get(OptionalAuthMiddleware, getPostBySlug);
 router.route("/:id").patch(AuthMiddleware, trimRequest.all, updatePost).delete(AuthMiddleware, deletePost);
+router.route("/:id/like").post(AuthMiddleware, likePost).delete(AuthMiddleware, unlikePost);
 
 export default router;

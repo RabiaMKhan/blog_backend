@@ -1,7 +1,5 @@
 import Joi from "joi";
 
-// slug, author and publishedAt are set by the server, so they are not accepted here -
-// joi rejects unknown keys, so a client can't post on behalf of someone else
 const fields = {
   title: Joi.string().trim().min(3).max(150),
   content: Joi.string().trim().min(10),

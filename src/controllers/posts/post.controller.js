@@ -4,6 +4,8 @@ import {
   getMyPostsService,
   getPostBySlugService,
   getPostsService,
+  likePostService,
+  unlikePostService,
   updatePostService,
 } from "../../services/posts.services.js";
 
@@ -47,4 +49,14 @@ export const updatePost = async (req, res) => {
 export const deletePost = async (req, res) => {
   await deletePostService(req.params.id, req.user.id);
   res.status(200).json({ message: "Post deleted successfully." });
+};
+
+export const likePost = async (req, res) => {
+  const { liked, likesCount } = await likePostService(req.params.id, req.user.id);
+  res.status(200).json({ liked, likesCount });
+};
+
+export const unlikePost = async (req, res) => {
+  const { liked, likesCount } = await unlikePostService(req.params.id, req.user.id);
+  res.status(200).json({ liked, likesCount });
 };
