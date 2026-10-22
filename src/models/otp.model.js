@@ -12,6 +12,17 @@ const otpSchema = new Schema(
       type: String, // bcrypt hash of the code, never the plain code
       required: true,
     },
+    // a code sent for one flow must not work in the other
+    purpose: {
+      type: String,
+      enum: ["verify-email", "reset-password"],
+      default: "verify-email",
+    },
+    // wrong guesses so far - the code is deleted after too many
+    attempts: {
+      type: Number,
+      default: 0,
+    },
     expiresAt: {
       type: Date,
       required: true,

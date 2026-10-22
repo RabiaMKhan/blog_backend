@@ -10,6 +10,7 @@ import {
   sendOtpEmail,
   OTP_EXPIRY_MINUTES,
   OTP_RESEND_COOLDOWN_SECONDS,
+  OTP_MAX_ATTEMPTS,
 } from "../utils/service.util.js";
 import {
   generateAccessToken,
@@ -57,15 +58,43 @@ export const signupUserService = async (userData) => {
   };
 };
 
-export const createAndSendOtp = async (user) => {
+export const createAndSendOtp = async (user, purpose = "verify-email") => {
   const otp = generateOtp();
-  await OTPModel.deleteMany({ userId: user._id });
+  await OTPModel.deleteMany({ userId: user._id, purpose });
   await OTPModel.create({
     userId: user._id,
     otp: await bcrypt.hash(otp, 10),
+    purpose,
     expiresAt: new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000),
   });
-  await sendOtpEmail(user, otp);
+  await sendOtpEmail(user, otp, purpose);
+};
+
+// Checks a code and deletes it once used, so it can't be reused. Throws if it's wrong.
+const consumeOtp = async (user, otp, purpose) => {
+  // the TTL index only sweeps about once a minute, so check expiresAt ourselves too
+  const otpDoc = await OTPModel.findOne({ userId: user._id, purpose });
+  if (!otpDoc || otpDoc.expiresAt < new Date()) {
+    throw createHttpError.BadRequest(
+      "Code has expired. Please request a new one.",
+    );
+  }
+
+  const isOtpMatch = await bcrypt.compare(String(otp), otpDoc.otp);
+  if (!isOtpMatch) {
+    // a 6-digit code can be guessed if attempts are unlimited
+    otpDoc.attempts += 1;
+    if (otpDoc.attempts >= OTP_MAX_ATTEMPTS) {
+      await otpDoc.deleteOne();
+      throw createHttpError.BadRequest(
+        "Too many wrong attempts. Please request a new code.",
+      );
+    }
+    await otpDoc.save();
+    throw createHttpError.BadRequest("Invalid code.");
+  }
+
+  await OTPModel.deleteMany({ userId: user._id, purpose });
 };
 
 export const verifyOtpService = async (data) => {
@@ -83,22 +112,9 @@ export const verifyOtpService = async (data) => {
     throw createHttpError.BadRequest("This email is already verified.");
   }
 
-  // the TTL index only sweeps about once a minute, so check expiresAt ourselves too
-  const otpDoc = await OTPModel.findOne({ userId: user._id });
-  if (!otpDoc || otpDoc.expiresAt < new Date()) {
-    throw createHttpError.BadRequest(
-      "Verification code has expired. Please request a new one.",
-    );
-  }
+  await consumeOtp(user, otp, "verify-email");
 
-  const isOtpMatch = await bcrypt.compare(String(otp), otpDoc.otp);
-  if (!isOtpMatch) {
-    throw createHttpError.BadRequest("Invalid verification code.");
-  }
-
-  // correct code - mark verified and delete the otp so it can't be reused
   user.isVerified = true;
-  await OTPModel.deleteMany({ userId: user._id });
   const accessToken = generateAccessToken(user);
   const refreshToken = generateRefreshToken(user);
   user.refreshToken = hashToken(refreshToken);
@@ -131,7 +147,10 @@ export const resendOtpService = async (data) => {
   }
 
   // stop the resend button from being spammed
-  const lastOtp = await OTPModel.findOne({ userId: user._id });
+  const lastOtp = await OTPModel.findOne({
+    userId: user._id,
+    purpose: "verify-email",
+  });
   if (lastOtp) {
     const secondsSince = (Date.now() - lastOtp.createdAt.getTime()) / 1000;
     if (secondsSince < OTP_RESEND_COOLDOWN_SECONDS) {
@@ -217,7 +236,91 @@ export const refreshTokenService = async (token) => {
   return { accessToken, refreshToken };
 };
 
+export const forgotPasswordService = async (data) => {
+  const { error } = AuthValidations.forgotPassword(data);
+  if (error) {
+    throw createHttpError.BadRequest(error.details[0].message);
+  }
+
+  // nobody can use this endpoint to find out which emails have accounts
+  const user = await UserModel.findOne({ email: data.email.toLowerCase() });
+  if (!user) return;
+
+  // stop the button from being used to spam someone's inbox
+  const lastOtp = await OTPModel.findOne({
+    userId: user._id,
+    purpose: "reset-password",
+  });
+  if (lastOtp) {
+    const secondsSince = (Date.now() - lastOtp.createdAt.getTime()) / 1000;
+    if (secondsSince < OTP_RESEND_COOLDOWN_SECONDS) return;
+  }
+
+  try {
+    await createAndSendOtp(user, "reset-password");
+  } catch (error) {
+    logger.error(
+      `Failed to send reset email to ${user.email}: ${error.stack || error.message}`,
+    );
+  }
+};
+
+export const resetPasswordService = async (data) => {
+  const { error } = AuthValidations.resetPassword(data);
+  if (error) {
+    throw createHttpError.BadRequest(error.details[0].message);
+  }
+  const { email, otp, newPassword } = data;
+
+  const user = await UserModel.findOne({ email: email.toLowerCase() });
+  // same message as a wrong code, so this doesn't reveal which emails exist
+  if (!user) {
+    throw createHttpError.BadRequest(
+      "Code has expired. Please request a new one.",
+    );
+  }
+
+  await consumeOtp(user, otp, "reset-password");
+
+  user.password = await bcrypt.hash(newPassword, 12);
+  user.isVerified = true;
+  // log out every device - whoever had the old password loses access
+  user.refreshToken = undefined;
+  await user.save();
+};
+
+export const changePasswordService = async (userId, data) => {
+  const { error } = AuthValidations.changePassword(data);
+  if (error) {
+    throw createHttpError.BadRequest(error.details[0].message);
+  }
+  const { currentPassword, newPassword } = data;
+
+  const user = await UserModel.findById(userId);
+  if (!user) throw createHttpError.NotFound("User not found.");
+
+  const matchPassword = await bcrypt.compare(currentPassword, user.password);
+  if (!matchPassword) {
+    throw createHttpError.BadRequest("Current password is incorrect.", {
+      errors: { currentPassword: "Current password is incorrect." },
+    });
+  }
+
+  user.password = await bcrypt.hash(newPassword, 12);
+  // new refresh token replaces the stored one, so other devices are logged out
+  // but this one stays logged in
+  const accessToken = generateAccessToken(user);
+  const refreshToken = generateRefreshToken(user);
+  user.refreshToken = hashToken(refreshToken);
+  await user.save();
+
+  return { accessToken, refreshToken };
+};
+
 export const logoutService = async (token) => {
   if (!token) return;
-  await UserModel.updateOne({ refreshToken: hashToken(token) }, { $unset: { refreshToken: 1 } });
+  await UserModel.updateOne(
+    { refreshToken: hashToken(token) },
+    { $unset: { refreshToken: 1 } },
+  );
 };
