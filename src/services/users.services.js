@@ -4,13 +4,18 @@ import UserModel from "../models/users.model.js";
 import { AuthValidations } from "../validations/auth.validation.js";
 import logger from "../config/logger.config.js";
 import OTPModel from "../models/otp.model.js";
-import jwt from 'jsonwebtoken';
+import jwt from "jsonwebtoken";
 import {
   generateOtp,
   sendOtpEmail,
   OTP_EXPIRY_MINUTES,
   OTP_RESEND_COOLDOWN_SECONDS,
 } from "../utils/service.util.js";
+import {
+  generateAccessToken,
+  generateRefreshToken,
+  hashToken,
+} from "../utils/token.utils.js";
 
 export const signupUserService = async (userData) => {
   const { error } = AuthValidations.signUpUser(userData);
@@ -93,20 +98,14 @@ export const verifyOtpService = async (data) => {
 
   // correct code - mark verified and delete the otp so it can't be reused
   user.isVerified = true;
-  await user.save();
   await OTPModel.deleteMany({ userId: user._id });
-  const token = jwt.sign(
-    {
-      id: user._id,
-      role: "user",
-    },
-    process.env.JWT_SECRET,
-    {
-      expiresIn: "48h",
-    },
-  );
+  const accessToken = generateAccessToken(user);
+  const refreshToken = generateRefreshToken(user);
+  user.refreshToken = hashToken(refreshToken);
+  await user.save();
   return {
-    accessToken: token,
+    accessToken,
+    refreshToken,
     user: {
       _id: user?.id,
       firstName: user?.firstName,
@@ -172,23 +171,53 @@ export const loginUserService = async (userData) => {
       "Invalid credentials. Please provide valid credentials",
     );
   }
-  const token = jwt.sign(
-    {
-      id: user._id,
-      role: "user",
-    },
-    process.env.JWT_SECRET,
-    {
-      expiresIn: "48h",
-    },
-  );
+  const accessToken = generateAccessToken(user);
+  const refreshToken = generateRefreshToken(user);
+  user.refreshToken = hashToken(refreshToken);
+  await user.save();
+
   return {
-    accessToken: token,
+    accessToken,
+    refreshToken,
     user: {
       firstName: user?.firstName,
       lastName: user?.lastName,
       email: user?.email,
       isVerified: user?.isVerified,
-    }
+    },
+  };
+};
+
+export const refreshTokenService = async (token) => {
+  if (!token) throw createHttpError.Unauthorized("Refresh token is missing");
+
+  let payload;
+  try {
+    payload = jwt.verify(token, process.env.REFRESH_TOKEN_SECRET);
+  } catch (error) {
+    throw createHttpError.Unauthorized("Invalid or expired refresh token.");
   }
+
+  const user = await UserModel.findById(payload.id).select("+refreshToken");
+  // a valid JWT that doesn't match the stored hash was already used or revoked
+  if (!user || user.refreshToken !== hashToken(token)) {
+    if (user) {
+      user.refreshToken = undefined; // possible theft: log this user out everywhere
+      await user.save();
+    }
+    throw createHttpError.Unauthorized(
+      "Refresh token reuse detected. Please log in again.",
+    );
+  }
+  const accessToken = generateAccessToken(user);
+  const refreshToken = generateRefreshToken(user);
+  user.refreshToken = hashToken(refreshToken);
+  await user.save();
+
+  return { accessToken, refreshToken };
+};
+
+export const logoutService = async (token) => {
+  if (!token) return;
+  await UserModel.updateOne({ refreshToken: hashToken(token) }, { $unset: { refreshToken: 1 } });
 };

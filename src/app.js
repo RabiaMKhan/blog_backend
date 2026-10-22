@@ -6,13 +6,15 @@ import routes from "./routes/index.js";
 import createHttpError from "http-errors";
 import nosqlInjectionMiddleware from "./middlewares/noSqlInjection.middleware.js"
 import logger from "./config/logger.config.js";
+import cookieParser from "cookie-parser";
 
 const app = express();
 
 // middleware to allow cross-origin requests
-app.use(cors({ origin: true, credentials: true })); 
+app.use(cors({ origin: process.env.CLIENT_URL, credentials: true })); 
 // middleware to apply security on the http headers
 app.use(helmet()); 
+app.use(cookieParser());
 // limit the payload
 const bodyLimit = process.env.BODY_PARSER_LIMIT || "50mb";
 // middleware to parse incoming requests with JSON payloads
