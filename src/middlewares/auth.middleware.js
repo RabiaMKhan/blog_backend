@@ -2,7 +2,6 @@ import jwt from "jsonwebtoken";
 import createHttpError from "http-errors";
 import UserModel from "../models/users.model.js";
 
-// Protects a route: expects "Authorization: Bearer <accessToken>" and sets req.user
 export const AuthMiddleware = async (req, res, next) => {
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith("Bearer ")) {
@@ -31,5 +30,11 @@ export const AuthMiddleware = async (req, res, next) => {
   req.user = { id: user.id, role: payload.role };
   next();
 };
+
+// For public routes that show more to a logged-in user, e.g. an author viewing their own draft.
+// No token -> carries on as a guest. A token that is sent must still be valid, so the
+// frontend gets a 401 and refreshes it instead of silently being treated as a guest.
+export const OptionalAuthMiddleware = (req, res, next) =>
+  req.headers.authorization ? AuthMiddleware(req, res, next) : next();
 
 export default AuthMiddleware;
