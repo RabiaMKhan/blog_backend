@@ -7,8 +7,13 @@ import createHttpError from "http-errors";
 import nosqlInjectionMiddleware from "./middlewares/noSqlInjection.middleware.js"
 import logger from "./config/logger.config.js";
 import cookieParser from "cookie-parser";
+import { apiLimiter } from "./middlewares/rateLimit.middleware.js";
 
 const app = express();
+
+// behind a proxy (Render, Railway, nginx...) set TRUST_PROXY=1, or every visitor
+// shares the proxy's IP and the rate limits apply to everyone at once
+app.set("trust proxy", Number(process.env.TRUST_PROXY || 0));
 
 // middleware to allow cross-origin requests
 app.use(cors({ origin: process.env.CLIENT_URL, credentials: true })); 
@@ -16,7 +21,7 @@ app.use(cors({ origin: process.env.CLIENT_URL, credentials: true }));
 app.use(helmet()); 
 app.use(cookieParser());
 // limit the payload
-const bodyLimit = process.env.BODY_PARSER_LIMIT || "50mb";
+const bodyLimit = process.env.BODY_PARSER_LIMIT || "1mb";
 // middleware to parse incoming requests with JSON payloads
 app.use(express.json({ limit: bodyLimit })); 
 // middleware to parse incoming requests with URL-encoded payloads
@@ -25,7 +30,7 @@ app.use(bodyParser.urlencoded({ limit: bodyLimit, extended: true }));
 app.use(nosqlInjectionMiddleware); 
 
 // middleware to handle all the routes
-app.use("/api/v1", routes); 
+app.use("/api/v1", apiLimiter, routes);
 app.use(async (req, res, next) => {
   next(createHttpError.NotFound("Route not found"));
 });

@@ -11,6 +11,9 @@ import {
 } from "../../services/users.services.js";
 import { refreshCookieOptions } from "../../utils/token.utils.js";
 
+// stored on the session so a user can later see which devices are logged in
+const sessionMeta = (req) => ({ userAgent: req.get("user-agent") });
+
 // Create New User - sends a verification code to their email
 export const signupUser = async (req, res) => {
   const user = await signupUserService(req.body);
@@ -23,7 +26,7 @@ export const signupUser = async (req, res) => {
 
 // Verify the email with the code that was sent
 export const verifyOtp = async (req, res) => {
-  const { refreshToken, ...data } = await verifyOtpService(req.body);
+  const { refreshToken, ...data } = await verifyOtpService(req.body, sessionMeta(req));
   res.cookie("refreshToken", refreshToken, refreshCookieOptions);
   res.status(200).json({
     message: "Email verified successfully",
@@ -40,8 +43,8 @@ export const resendOtp = async (req, res) => {
 };
 
 export const loginUser = async (req, res) => {
-   const { refreshToken, ...data } = await loginUserService(req.body);
-   res.cookie('refreshToken', refreshToken, refreshCookieOptions)
+  const { refreshToken, ...data } = await loginUserService(req.body, sessionMeta(req));
+  res.cookie('refreshToken', refreshToken, refreshCookieOptions)
   res.status(200).json({
     message: "User loggedIn successfully.",
     ...data,
@@ -72,7 +75,11 @@ export const resetPassword = async (req, res) => {
 
 // Change password while logged in - other devices are logged out, this one stays in
 export const changePassword = async (req, res) => {
-  const { accessToken, refreshToken } = await changePasswordService(req.user.id, req.body);
+  const { accessToken, refreshToken } = await changePasswordService(
+    req.user.id,
+    req.body,
+    sessionMeta(req),
+  );
   res.cookie("refreshToken", refreshToken, refreshCookieOptions);
   res.status(200).json({
     message: "Password changed successfully.",

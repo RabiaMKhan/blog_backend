@@ -1,12 +1,15 @@
 import Joi from "joi";
 
+// rules for any new password. bcrypt ignores everything after 72 bytes, so that's the max
+const newPassword = Joi.string().min(8).max(72);
+
 export class AuthValidations {
   static signUpUser(params) {
     const schema = Joi.object({
       firstName: Joi.string().required().min(3).max(30),
       lastName: Joi.string().required().min(3).max(30),
       email: Joi.string().email().required(),
-      password: Joi.string().required().min(4).max(20),
+      password: newPassword.required(),
     });
     const result = schema.validate(params, {
       errors: { wrap: { label: false } },
@@ -16,7 +19,8 @@ export class AuthValidations {
   static loginUser(params) {
     const schema = Joi.object({
       email: Joi.string().email().required(),
-      password: Joi.string().required().min(4).max(20),
+      // no minimum here - accounts made before the 8-character rule must still log in
+      password: Joi.string().required().max(72),
     });
     const result = schema.validate(params, {
       errors: { wrap: { label: false } },
@@ -58,7 +62,7 @@ export class AuthValidations {
         .pattern(/^\d+$/)
         .required()
         .messages({ "string.pattern.base": "otp must contain only digits" }),
-      newPassword: Joi.string().required().min(4).max(20),
+      newPassword: newPassword.required(),
     });
     return schema.validate(params, { errors: { wrap: { label: false } } });
   }
@@ -66,10 +70,8 @@ export class AuthValidations {
   static changePassword(params) {
     const schema = Joi.object({
       currentPassword: Joi.string().required(),
-      newPassword: Joi.string()
+      newPassword: newPassword
         .required()
-        .min(4)
-        .max(20)
         .invalid(Joi.ref("currentPassword"))
         .messages({
           "any.invalid": "newPassword must be different from currentPassword",

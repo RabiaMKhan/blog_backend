@@ -28,10 +28,6 @@ const userSchema = new Schema(
       type: Boolean,
       default: false,
     },
-    refreshToken: {
-      type: String,
-      select: false // never return untill asked
-    }
   },
   {
     timestamps: true,

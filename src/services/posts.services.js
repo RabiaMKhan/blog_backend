@@ -135,11 +135,13 @@ export const updatePostService = async (postId, userId, postData) => {
 
 export const deletePostService = async (postId, userId) => {
   const post = await findOwnPost(postId, userId);
-  await post.deleteOne();
+  // children first: if this fails partway the post still exists and the delete can be
+  // retried, instead of leaving likes and comments pointing at a post that's gone
   await Promise.all([
     LikeModel.deleteMany({ post: post._id }),
     CommentModel.deleteMany({ post: post._id }),
   ]);
+  await post.deleteOne();
 };
 
 // Liking twice is not an error - the post just stays liked
