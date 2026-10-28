@@ -26,10 +26,23 @@ export const AuthMiddleware = async (req, res, next) => {
   if (!user.isVerified) {
     throw createHttpError.Forbidden("Please verify your email first.");
   }
-
-  req.user = { id: user.id, role: payload.role };
+  // role comes from the database, not the token, so it can't be out of date
+  req.user = { id: user.id, role: user.role };
   next();
 };
+
+// Use after AuthMiddleware, e.g. router.use(AuthMiddleware, requireRole("admin"))
+export const requireRole =
+  (...roles) =>
+  (req, res, next) => {
+    if (!roles.includes(req.user?.role)) {
+      throw createHttpError.Forbidden("You don't have permission to do this.");
+    }
+    next();
+  };
+
+// Writing posts, comments and likes is for users - the admin account only manages the app
+export const UserOnly = [AuthMiddleware, requireRole("user")];
 
 // For public routes that show more to a logged-in user, e.g. an author viewing their own draft.
 // No token -> carries on as a guest. A token that is sent must still be valid, so the

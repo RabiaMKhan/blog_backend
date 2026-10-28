@@ -4,7 +4,7 @@ import crypto from 'crypto';
 export const REFRESH_DAYS = Number(process.env.REFRESH_TOKEN_EXPIRY_DAYS || 7);
 
 export const generateAccessToken = (user) =>
-    jwt.sign({ id: user._id, role: "user" }, process.env.ACCESS_TOKEN_SECRET, {
+    jwt.sign({ id: user._id, role: user.role }, process.env.ACCESS_TOKEN_SECRET, {
     expiresIn: process.env.ACCESS_TOKEN_EXPIRY || "15m",
   });
 

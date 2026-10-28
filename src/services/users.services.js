@@ -28,6 +28,7 @@ const toPublicUser = (user) => ({
   lastName: user.lastName,
   email: user.email,
   isVerified: user.isVerified,
+  role: user.role, // lets the frontend show the admin screens
 });
 
 const refreshExpiryDate = () =>
