@@ -205,22 +205,12 @@ export const loginUserService = async (userData, meta) => {
     );
   }
 
-  // the tokens would be rejected by every protected route anyway, so don't hand them out.
-  // send a fresh code so the frontend can take the user straight to the verify screen
+  // no tokens until the email is verified - the code is sent with /auth/resend-otp
   if (!user.isVerified) {
-    if ((await secondsUntilNextOtp(user, "verify-email")) === 0) {
-      try {
-        await createAndSendOtp(user);
-      } catch (error) {
-        logger.error(
-          `Failed to send OTP email to ${user.email}: ${error.stack || error.message}`,
-        );
-      }
-    }
     // createHttpError.Forbidden() would drop the errors object - only this form keeps it
     throw createHttpError(
       403,
-      "Please verify your email first. A verification code has been sent to your inbox.",
+      "Your email is not verified. Kindly verify your email first.",
       { errors: { email: "Email is not verified." } },
     );
   }
