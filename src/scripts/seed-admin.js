@@ -1,5 +1,4 @@
-// Creates the app's one admin account from .env, or updates it if it already exists.
-// Change ADMIN_EMAIL / ADMIN_PASSWORD in .env and run it again to change the credentials.
+// Creates the one admin account from ADMIN_* in .env, or updates it if it exists.
 // Usage: npm run seed-admin
 import "dotenv/config";
 import mongoose from "mongoose";

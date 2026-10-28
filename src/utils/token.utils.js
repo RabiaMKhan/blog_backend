@@ -8,9 +8,8 @@ export const generateAccessToken = (user) =>
     expiresIn: process.env.ACCESS_TOKEN_EXPIRY || "15m",
   });
 
-// sid is the session (device) this token belongs to. jwtid makes every token unique -
-// without it two tokens made in the same second are identical, and rotation can't tell
-// the old one from the new one
+// sid is the session (device) this token belongs to.
+// jwtid makes every token unique, so rotation can tell old and new tokens apart
 export const generateRefreshToken = (user, sessionId) =>
   jwt.sign({ id: user._id, sid: sessionId }, process.env.REFRESH_TOKEN_SECRET, {
     expiresIn: `${REFRESH_DAYS}d`,

@@ -54,9 +54,7 @@ app.use((err, req, res, next) => {
   res.status(status).json({
     error: {
       status,
-      // don't leak internal error details to the client
       message: expose ? err.message : "Internal Server Error",
-      // per-field messages for the frontend, e.g. { email: "..." }
       ...(err.errors && { errors: err.errors }),
     },
   });

@@ -44,9 +44,8 @@ export const requireRole =
 // Writing posts, comments and likes is for users - the admin account only manages the app
 export const UserOnly = [AuthMiddleware, requireRole("user")];
 
-// For public routes that show more to a logged-in user, e.g. an author viewing their own draft.
-// No token -> carries on as a guest. A token that is sent must still be valid, so the
-// frontend gets a 401 and refreshes it instead of silently being treated as a guest.
+// Public routes that show more to a logged-in user, e.g. an author's own draft.
+// No token -> guest. A token that is sent must still be valid, so an expired one gets a 401
 export const OptionalAuthMiddleware = (req, res, next) =>
   req.headers.authorization ? AuthMiddleware(req, res, next) : next();
 

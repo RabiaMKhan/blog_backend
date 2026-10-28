@@ -28,7 +28,6 @@ const userSchema = new Schema(
       type: Boolean,
       default: false,
     },
-    // "user" writes posts. "admin" is the single app admin, created by `npm run seed-admin`
     role: {
       type: String,
       enum: ["user", "admin"],
